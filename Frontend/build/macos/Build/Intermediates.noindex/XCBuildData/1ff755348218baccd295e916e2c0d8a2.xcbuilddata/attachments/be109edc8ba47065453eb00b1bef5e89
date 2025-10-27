@@ -1,5 +1,0 @@
-
-module syncfusion_pdfviewer_macos.Swift {
-  header "syncfusion_pdfviewer_macos-Swift.h"
-  requires objc
-}
