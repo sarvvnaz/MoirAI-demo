@@ -1,4 +1,0 @@
-
-module syncfusion_pdfviewer_macos.__Swift {
-  exclude header "syncfusion_pdfviewer_macos-Swift.h"
-}
