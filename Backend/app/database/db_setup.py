@@ -1,13 +1,11 @@
 from __future__ import annotations
-
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.engine import Engine
 from sqlalchemy.pool import StaticPool
-
+from app.database.base_class import Base
 from app.config import DATABASE_URL
 
-# SQLite needs special args for multithreaded FastAPI usage.
 if DATABASE_URL.startswith("sqlite"):
     engine: Engine = create_engine(
         DATABASE_URL,
@@ -18,17 +16,14 @@ else:
     engine: Engine = create_engine(DATABASE_URL)
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
-Base = declarative_base()
 
 def get_db():
-    """
-    FastAPI dependency: yields a SQLAlchemy session and guarantees close().
-    """
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
+
 if __name__ == "__main__":
     from app.database import models
     print("Creating database tables...")
