@@ -139,7 +139,7 @@ class _TaskPageState extends State<TaskPage> {
         userId: widget.userId,
         onIdle: _handleIdle,
         onFocusReturn: _handleFocusReturn,
-        idleThreshold: const Duration(seconds: 5),
+        idleThreshold: const Duration(seconds: 20),
         child: Scaffold(
           backgroundColor: const Color(0xFFF5F0FF),
           appBar: AppBar(
