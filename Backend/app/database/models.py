@@ -2,7 +2,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional, Literal
 from sqlalchemy import (
-    String, Integer, DateTime, ForeignKey, Text, JSON, Enum, Index, Column
+    String, Integer, Float, DateTime, func, ForeignKey, Text, JSON, Enum, Index, Column
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .db_setup import Base
@@ -148,10 +148,24 @@ class UserActivity(Base):
 # EVENT LOG
 # ─────────────────────────────
 class EventLog(Base):
-    __tablename__ = "event_logs"
+    __tablename__ = "event_log"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    event_type = Column(String, nullable=False)
-    details = Column(JSON)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    event_type = Column(String, index=True)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    details = Column(JSON, nullable=True)
+
+
+class UserStats(Base):
+    __tablename__ = "user_stats"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    idle_count = Column(Integer, default=0)
+    distraction_count = Column(Integer, default=0)
+    total_sustained_attention = Column(Float, default=0.0)
+    total_refocus_within_60s = Column(Integer, default=0)
+    total_nudges_shown = Column(Integer, default=0)
+    total_sessions = Column(Integer, default=0)
+    avg_feedback_score = Column(Float, default=0.0)
