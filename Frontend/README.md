@@ -39,7 +39,7 @@ The system is built using a **Flutter + FastAPI** stack for modular experimentat
 | Frontend | Flutter (Dart) | Cross-platform UI for focus sessions, check-ins, and nudges |
 | Backend | FastAPI (Python) | REST API for session management, nudge generation, and data logging |
 | Database | SQLite / PostgreSQL | Stores user profiles, sessions, and nudge logs |
-| AI Layer | Groq API / LLM Integration | Generates personalized EFT-based nudges |
+| AI Layer | OpenAI API / LLM Integration | Generates personalized EFT-based nudges |
 | Idle Detection | OS + App Monitors | Tracks window/app usage to infer idle states |
 
 ---
