@@ -5,8 +5,7 @@ from sqlalchemy import (
     String, Integer, Float, DateTime, func, ForeignKey, Text, JSON, Enum, Index, Column
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from .db_setup import Base
-
+from .base_class import Base
 # ─────────────────────────────
 # USER
 # ─────────────────────────────
@@ -33,6 +32,9 @@ class User(Base):
     )
     activities: Mapped[list["UserActivity"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
+    )
+    stats: Mapped[Optional["UserStats"]] = relationship(
+        back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
 
     def __repr__(self):
@@ -122,20 +124,19 @@ class Nudge(Base):
 # ─────────────────────────────
 class UserActivity(Base):
     """
-    Tracks user sessions, focus/idle, reading, quiz performance, etc.
-    Will be useful when linking with eye-tracking or attention data.
+    Tracks all granular user events (reading, idle, focus, nudge, etc.)
+    Useful for fine-grained behavioral timelines.
     """
     __tablename__ = "user_activity"
     __table_args__ = (Index("ix_activity_user_created", "user_id", "created_at"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-
-    activity_type: Mapped[str] = mapped_column(String(64), nullable=False)  # e.g. "reading", "idle_detected", "focus_resumed", "nudge_shown"
+    activity_type: Mapped[str] = mapped_column(String(64), nullable=False)
     duration_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    performance_score: Mapped[Optional[float]] = mapped_column(Integer, nullable=True)  # e.g. quiz result or comprehension
+    performance_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     extra_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
     user: Mapped["User"] = relationship(back_populates="activities")
 
@@ -144,28 +145,61 @@ class UserActivity(Base):
 
 
 
+
 # ─────────────────────────────
 # EVENT LOG
 # ─────────────────────────────
 class EventLog(Base):
+    """
+    Stores raw frontend/backend system events.
+    More generic than UserActivity — includes internal triggers and feedback events.
+    """
     __tablename__ = "event_log"
 
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    event_type = Column(String, index=True)
-    timestamp = Column(DateTime(timezone=True), server_default=func.now())
-    details = Column(JSON, nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    details: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+
+    user: Mapped["User"] = relationship(back_populates="event_logs")
+
+    def __repr__(self):
+        return f"<EventLog user_id={self.user_id} type={self.event_type}>"
+
+# Add reverse relationship to User
+User.event_logs = relationship("EventLog", back_populates="user", cascade="all, delete-orphan")
 
 
+# ─────────────────────────────
+# USER STATS (AGGREGATED METRICS)
+# ─────────────────────────────
 class UserStats(Base):
+    """
+    Stores aggregate statistics for each user for research analysis.
+    Updated dynamically via /events/log.
+    """
     __tablename__ = "user_stats"
 
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
-    idle_count = Column(Integer, default=0)
-    distraction_count = Column(Integer, default=0)
-    total_sustained_attention = Column(Float, default=0.0)
-    total_refocus_within_60s = Column(Integer, default=0)
-    total_nudges_shown = Column(Integer, default=0)
-    total_sessions = Column(Integer, default=0)
-    avg_feedback_score = Column(Float, default=0.0)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
+
+    # Research metrics
+    idle_count: Mapped[int] = mapped_column(Integer, default=0)
+    distraction_count: Mapped[int] = mapped_column(Integer, default=0)
+    total_sustained_attention: Mapped[float] = mapped_column(Float, default=0.0)
+    total_refocus_within_60s: Mapped[int] = mapped_column(Integer, default=0)
+    total_nudges_shown: Mapped[int] = mapped_column(Integer, default=0)
+    total_sessions: Mapped[int] = mapped_column(Integer, default=0)
+    avg_feedback_score: Mapped[float] = mapped_column(Float, default=0.0)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=datetime.utcnow)
+
+    user: Mapped["User"] = relationship(back_populates="stats")
+
+    def __repr__(self):
+        return f"<UserStats user_id={self.user_id} idle={self.idle_count} nudges={self.total_nudges_shown}>"
+    
+
+__all__ = ["User", "UserActivity", "EventLog", "UserStats"]

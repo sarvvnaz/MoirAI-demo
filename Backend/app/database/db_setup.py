@@ -4,6 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.engine import Engine
 from sqlalchemy.pool import StaticPool
 from app.database.base_class import Base
+
 from app.config import DATABASE_URL
 
 if DATABASE_URL.startswith("sqlite"):
