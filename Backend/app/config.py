@@ -9,7 +9,11 @@ from datetime import timedelta
 # ─────────────────────────────
 
 # Locate the Backend folder (parent of /app)
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent
+ENV_PATH = BASE_DIR / ".env"
+DB_PATH = BASE_DIR / "database" / "app.db"
+DATABASE_URL = f"sqlite:///{DB_PATH}"
+
 ENV_PATH = BASE_DIR / ".env"
 
 # Load environment variables from .env in /Backend

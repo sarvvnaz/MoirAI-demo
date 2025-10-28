@@ -22,7 +22,6 @@ app.include_router(auth.router)    # /auth
 app.include_router(eft.router)     # /eft
 app.include_router(nudges.router)  # /nudges
 app.include_router(events.router)  # /events
-app.include_router(events.router)
 
 @app.get("/")
 def root():
