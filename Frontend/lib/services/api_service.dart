@@ -1,110 +1,198 @@
 import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb; // 🔹 added
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+// ⬅️ keep using LocalBackend for non-web (local dev / native)
+import '../main.dart' show LocalBackend;
+
 class ApiService {
-  static const String baseUrl = "http://127.0.0.1:8000"; // for iOS simulator
-  // if using Android emulator use: "http://10.0.2.2:8000"
+  static const _timeout = Duration(seconds: 12);
+  static int _localNudgeIndex = 0; // (kept from your code)
 
-  static Future<http.Response> signup(Map<String, String> data) async {
-    final url = Uri.parse('$baseUrl/auth/signup');
-    final headers = {'Content-Type': 'application/json'};
-    final body = jsonEncode(data);
-
-    final response = await http.post(url, headers: headers, body: body);
-    return response;
+  // 🔹 NEW: choose base URL depending on platform
+  static Uri get _base {
+    if (kIsWeb) {
+      // On web: use same origin as the loaded page
+      final uri = Uri.base;
+      return Uri(
+        scheme: uri.scheme,
+        host: uri.host,
+        port: uri.hasPort ? uri.port : null,
+      );
+    } else {
+      // On desktop/mobile/local dev: use your LocalBackend (127.0.0.1:8765 etc.)
+      return LocalBackend.baseUrl;
+    }
   }
 
-  static Future<http.Response> login(Map<String, String> credentials) async {
-    final url = Uri.parse('$baseUrl/auth/login');
-    final response = await http.post(
-      url,
-      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      body: credentials, // not jsonEncode!
-    );
-    return response;
+  // 🔹 UPDATED: build URLs off _base instead of hardcoded 127.0.0.1
+  static Uri _u(String path) => _base.replace(path: path);
+
+  // ───────────────────────────────
+  // Auth
+  // ───────────────────────────────
+  static Future<http.Response> signup(Map<String, String> data) {
+    return http
+        .post(
+          _u('/api/auth/signup'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(data),
+        )
+        .timeout(_timeout);
   }
 
+  static Future<http.Response> login(Map<String, String> credentials) {
+    // Your backend expects form-encoded login
+    return http
+        .post(
+          _u('/api/auth/login'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(credentials),
+        )
+        .timeout(_timeout);
+  }
 
+  // ───────────────────────────────
+  // EFT
+  // ───────────────────────────────
   static Future<http.Response> submitEFT(
-      Map<String, dynamic> eftData, String token) async {
-    final url = Uri.parse('$baseUrl/eft/submit');
-    return await http.post(
-      url,
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer $token",
-      },
-      body: jsonEncode(eftData),
-    );
+      Map<String, dynamic> eftData, String token) {
+    return http
+        .post(
+          _u('/api/eft/submit'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode(eftData),
+        )
+        .timeout(_timeout);
   }
 
-  
-  // ────────────────────────────────
-  // ✅ Central token fetcher
-  // ────────────────────────────────
+  // ───────────────────────────────
+  // Token helper
+  // ───────────────────────────────
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('access_token');
   }
 
-  static Future<void> logEvent(int userId, String eventType, Map<String, dynamic> details) async {
+  // ───────────────────────────────
+  // Events
+  // ───────────────────────────────
+  static Future<void> logEvent(
+      int userId, String eventType, Map<String, dynamic> details) async {
     final token = await getToken();
     if (token == null) {
-      print("⚠️ No token found — user not logged in?");
+      debugPrint('⚠️ No token found — user not logged in?');
       return;
     }
 
-    final url = Uri.parse("$baseUrl/events/log");
+    final res = await http
+        .post(
+          _u('/api/events/log'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'event_type': eventType,
+            'details': details,
+          }),
+        )
+        .timeout(_timeout);
 
-    final response = await http.post(
-      url,
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer $token",
-      },
-      body: jsonEncode({
-        "event_type": eventType,
-        "details": details,
-      }),
-    );
-
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      print("✅ Logged event: $eventType");
+    if (res.statusCode == 200 || res.statusCode == 201) {
+      debugPrint('✅ Logged event: $eventType');
     } else {
-      print("⚠️ Failed to log event ($eventType): ${response.statusCode}");
+      debugPrint('⚠️ Failed to log event ($eventType): ${res.statusCode}');
     }
   }
 
-
-  // 💬 Fetch next sequential Persian nudge
-  static Future<String?> getNextNudge(int userId) async {
+  // ───────────────────────────────
+  // Nudges
+  // ───────────────────────────────
+  static Future<Map<String, dynamic>?> getNextNudge(
+      int userId, int currentNudgeId) async {
     final token = await getToken();
     if (token == null) {
-      print("⚠️ No token found — user not logged in?");
+      debugPrint('⚠️ No token found — user not logged in?');
       return null;
     }
 
-    final url = Uri.parse("$baseUrl/nudges/next/$userId");
-    final response = await http.get(
-      url,
+    try {
+      final res = await http
+          .get(
+            _u('/api/nudges/$userId/$currentNudgeId'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+          )
+          .timeout(_timeout);
+
+      if (res.statusCode == 200) {
+        return jsonDecode(res.body) as Map<String, dynamic>;
+      } else {
+        debugPrint('⚠️ Failed to fetch nudge: ${res.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error fetching nudge: $e');
+      return null;
+    }
+  }
+
+  // ──────────────────────────────
+  // Start Session
+  // ──────────────────────────────
+  static Future<Map<String, dynamic>?> startSession() async {
+    final token = await getToken();
+    if (token == null) {
+      debugPrint('⚠️ No token found — user not logged in');
+      return null;
+    }
+
+    final res = await http
+        .post(
+          _u('/api/events/session/start'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+        )
+        .timeout(_timeout);
+
+    debugPrint("📌 startSession response: ${res.statusCode} - ${res.body}");
+
+    if (res.statusCode == 200 || res.statusCode == 201) {
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    } else {
+      return null;
+    }
+  }
+
+  // ──────────────────────────────
+  // End Session
+  // ──────────────────────────────
+  static Future<void> endSession() async {
+    final token = await getToken();
+    if (token == null) return;
+
+    final res = await http.post(
+      _u('/api/events/end_session'),
       headers: {
-        "Authorization": "Bearer $token",
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
       },
     );
 
-    if (response.statusCode == 200) {
-      try {
-        final data = jsonDecode(response.body);
-        final nudge = data['nudge'] ?? data['text'] ?? data['message'];
-        print("💬 Nudge received: $nudge");
-        return nudge;
-      } catch (e) {
-        print("⚠️ Error decoding nudge JSON: $e");
-      }
+    if (res.statusCode == 200) {
+      debugPrint('🟢 Session ended successfully');
     } else {
-      print("⚠️ Failed to fetch nudge: ${response.statusCode}");
+      debugPrint('⚠️ Failed to end session: ${res.statusCode}');
     }
-    return null;
   }
 }

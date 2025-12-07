@@ -1,12 +1,14 @@
-from fastapi import APIRouter, Depends, status, HTTPException
+# eft.py
+import json
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from app.database.db_setup import get_db
 from app.database import models
+from app.database.db_setup import get_db
 from app.services.ai_service import generate_nudge
 from app.services.security import get_current_user
+from app.utils.nudge_parser import extract_nudge_messages  
 
-router = APIRouter(prefix="/eft", tags=["EFT"])
-
+router = APIRouter(prefix="/api/eft", tags=["EFT"])
 
 @router.post("/submit", status_code=status.HTTP_200_OK)
 def submit_eft(
@@ -14,14 +16,10 @@ def submit_eft(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    """
-    Save user's EFT reflection, generate two Persian motivational nudges,
-    and store both in the database.
-    """
     if not current_user:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    # ✅ Save EFT response
+    # Save EFT
     eft = models.EFTResponse(
         user_id=current_user.id,
         q1_why_goal_matters=data.get("q1_why_goal_matters"),
@@ -35,33 +33,36 @@ def submit_eft(
     db.commit()
     db.refresh(eft)
 
-    # ✅ Generate two new Persian nudges
-    nudges_text = []
+    # Generate + parse + save nudges
+    saved_msgs: list[str] = []
     for i in range(2):
         try:
-            prompt_text, nudge_text = generate_nudge(
+            _, raw = generate_nudge(
                 data,
-                user_name=current_user.full_name_fa or current_user.username,
-                english_goal=current_user.english_goal,
+                user_name=current_user.full_name_fa,
+                
             )
-            nudges_text.append(nudge_text)
 
-            # Save each nudge to DB
-            nudge = models.Nudge(
-                user_id=current_user.id,
-                type="positive",
-                source="ai",
-                text=nudge_text,
-            )
-            db.add(nudge)
-            print(f"✅ Generated nudge {i+1}: {nudge_text}")
+            msgs = extract_nudge_messages(raw)
+            if not msgs:
+                print(f"⚠️ Could not parse nudge {i+1}: not valid JSON.")
+                continue
+            print(f"💡 Parsed {msgs} messages from nudge set {i+1}")
+
+            for msg in msgs:
+                db.add(models.Nudge(
+                    user_id=current_user.id,
+                    type="positive",   # or detect from parsed JSON if you prefer
+                    source="ai",
+                    text=msg,          # <-- only the message text
+                ))
+                saved_msgs.append(msg)
+
+            print(f"✅ Stored {len(msgs)} messages from nudge set {i+1}")
 
         except Exception as e:
             print(f"⚠️ Error generating nudge {i+1}: {e}")
 
     db.commit()
 
-    return {
-        "message": "EFT responses and Persian nudges saved successfully.",
-        "nudges": nudges_text
-    }
+    return {"message": "EFT saved. Nudges parsed & stored.", "nudges": saved_msgs}

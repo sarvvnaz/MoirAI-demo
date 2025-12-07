@@ -2,18 +2,16 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from app.schemas import UserCreate
+from app.schemas import UserCreate, UserLogin
 from app.database.db_setup import get_db
 from app.database import models
 from app.services.security import (
-    hash_password,
-    verify_password,
     create_access_token,
     get_current_user,
 )
 
 
-router = APIRouter(prefix="/auth", tags=["Auth"])
+router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
 # ─────────────────────────────
 # SIGNUP
@@ -22,58 +20,44 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED)
 def signup(user: UserCreate, db: Session = Depends(get_db)):
-    existing_user = db.query(models.User).filter(models.User.username == user.username).first()
-    if existing_user:
-        raise HTTPException(status_code=400, detail="Username already registered")
+    if db.query(models.User).filter(models.User.email == user.email).first():
+        raise HTTPException(status_code=409, detail="Email already registered")
 
-    db_user = models.User(
-        username=user.username,
-        password_hash=hash_password(user.password),
-        full_name_fa=user.full_name_fa,
-        english_goal=user.english_goal,
-    )
-    db.add(db_user)
+    user = models.User(email=user.email, full_name_fa=user.full_name_fa)
+    db.add(user)
     db.commit()
-    db.refresh(db_user)
-
-    return {"message": "User created successfully", "user_id": db_user.id}
+    db.refresh(user)
+    return {"signup_ok": True, "user_id": user.id}
 
 
 # ─────────────────────────────
 # LOGIN
 # ─────────────────────────────
 @router.post("/login")
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.username == form_data.username).first()
-    if not user or not verify_password(form_data.password, user.password_hash):
+def login(body: UserLogin, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.email == body.email).first()
+    if not user :
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        raise HTTPException(status_code=401, detail="Invalid username or password")
-
-    access_token = create_access_token({"sub": user.username})
+    access_token = create_access_token({"sub": user.email})
     return {
         "access_token": access_token,
         "token_type": "bearer",
         "user": {
             "id": user.id,
-            "username": user.username,
+            "email": user.email,
             "full_name_fa": user.full_name_fa,
-            "english_goal": user.english_goal
         }
     }
-
 
 # ─────────────────────────────
 # CURRENT USER
 # ─────────────────────────────
 @router.get("/me")
-def get_me(current_user: models.User = Depends(get_current_user)):
-    """
-    Return the currently authenticated user.
-    """
+def me(current_user: models.User = Depends(get_current_user)):
     return {
         "id": current_user.id,
-        "username": current_user.username,
+        "email": current_user.email,
         "full_name_fa": current_user.full_name_fa,
-        "english_goal": current_user.english_goal,
         "created_at": current_user.created_at,
     }

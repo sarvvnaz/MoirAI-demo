@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:neuronudge/screens/signup_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
-import 'task_page.dart'; // navigation after login
+import 'home_page.dart'; // navigation after login
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -14,19 +14,16 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController usernameController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
+  final TextEditingController emailController = TextEditingController();
 
   bool _loading = false;
-  bool _obscure = true;
   Future<void> _login() async {
   if (!_formKey.currentState!.validate()) return;
 
   setState(() => _loading = true);
 
   final credentials = {
-    "username": usernameController.text.trim(),
-    "password": passwordController.text.trim(),
+    "email": emailController.text.trim(),
   };
 
   final response = await ApiService.login(credentials);
@@ -34,7 +31,7 @@ class _LoginPageState extends State<LoginPage> {
 
   // ✅ Debug print to see what backend actually returns
   print("🔍 Response code: ${response.statusCode}");
-  print("🔍 Response body: ${response.body}");
+  print("🔍 Responsez body: ${response.body}");
 
   if (response.statusCode == 200) {
     final body = jsonDecode(response.body);
@@ -51,7 +48,7 @@ class _LoginPageState extends State<LoginPage> {
       Navigator.pushReplacement(
         context,
         
-        MaterialPageRoute(builder: (_) => TaskPage(
+        MaterialPageRoute(builder: (_) => HomePage(
             userId: body['user']['id'],
           ),
         ),
@@ -75,76 +72,84 @@ class _LoginPageState extends State<LoginPage> {
       child: Scaffold(
         backgroundColor: const Color(0xFFF4EEFF),
         body: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(28),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.lock_outline,
-                        size: 70, color: Colors.deepPurple),
-                    const SizedBox(height: 20),
-                    const Text(
-                      "ورود به حساب کاربری",
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.deepPurple,
-                      ),
-                    ),
-                    const SizedBox(height: 40),
-                    _buildField(
-                      label: "نام کاربری",
-                      hint: "",
-                      controller: usernameController,
-                    ),
-                    const SizedBox(height: 16),
-                    _buildField(
-                      label: "رمز عبور",
-                      hint: "حداقل ۶ کاراکتر",
-                      controller: passwordController,
-                      obscureText: _obscure,
-                      suffix: IconButton(
-                        icon: Icon(
-                          _obscure
-                              ? Icons.visibility_off_outlined
-                              : Icons.visibility_outlined,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+            double screenWidth = constraints.maxWidth;
+
+            double formWidth;
+
+            if (screenWidth < 600) {
+              // Mobile
+              formWidth = screenWidth * 0.9;
+            } else if (screenWidth < 1100) {
+              // Tablet
+              formWidth = screenWidth * 0.6;
+            } else {
+              // Desktop / large screens
+              formWidth = screenWidth * 0.3;
+            }
+
+            return Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: formWidth,
+                ),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min, 
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.lock_outline, size: 70, color: Colors.deepPurple),
+                      const SizedBox(height: 20),
+                      const Text(
+                        "ورود به حساب کاربری",
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.deepPurple,
                         ),
-                        onPressed: () =>
-                            setState(() => _obscure = !_obscure),
                       ),
-                    ),
-                    const SizedBox(height: 30),
-                    ElevatedButton(
-                      onPressed: _loading ? null : _login,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.deepPurple,
-                        padding: const EdgeInsets.symmetric(
+                      const SizedBox(height: 40),
+
+                      _buildField(
+                        label: "ایمیل",
+                        hint: "",
+                        controller: emailController,
+                      ),
+
+                      const SizedBox(height: 30),
+                      ElevatedButton(
+                        onPressed: _loading ? null : _login,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.deepPurple,
+                          padding: const EdgeInsets.symmetric(
                             vertical: 14, horizontal: 80),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: _loading
+                            ? const CircularProgressIndicator(color: Colors.white)
+                            : const Text(
+                                "ورود",
+                                style: TextStyle(fontSize: 18, color: Colors.white),
+                              ),
                       ),
-                      child: _loading
-                          ? const CircularProgressIndicator(color: Colors.white)
-                          : const Text(
-                              "ورود",
-                              style:
-                                  TextStyle(fontSize: 18, color: Colors.white),
-                            ),
-                    ),
-                    const SizedBox(height: 20),
-                    TextButton(
-                      onPressed: () => Navigator.pushNamed(context, '/signup'),
-                      child: const Text("حساب ندارید؟ ثبت‌نام کنید"),
-                    ),
-                  ],
+
+                      const SizedBox(height: 20),
+                      TextButton(
+                        onPressed: () => Navigator.pushNamed(context, '/signup'),
+                        child: const Text("حساب ندارید؟ ثبت‌نام کنید"),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         ),
+
+          ),
       ),
     );
   }

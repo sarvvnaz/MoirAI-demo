@@ -1,52 +1,85 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:neuronudge/screens/break_page.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import '../services/api_service.dart';
 import '../services/idle_detector.dart';
+import 'feedback_page.dart';
 
 class TaskPage extends StatefulWidget {
   final int userId;
+  final int sessionId;
+  final int sessionNumber;
 
-  const TaskPage({Key? key, required this.userId}) : super(key: key);
+  const TaskPage({
+    Key? key,
+    required this.userId,
+    required this.sessionId,
+    required this.sessionNumber,
+  }) : super(key: key);
 
   @override
-  _TaskPageState createState() => _TaskPageState();
+  State<TaskPage> createState() => _TaskPageState();
 }
 
 class _TaskPageState extends State<TaskPage> {
   final PdfViewerController _pdfController = PdfViewerController();
+
   bool _showNudge = false;
   String? _nudgeText;
 
-  // 🕒 Timer state
-  static const int sessionSeconds = 600; // 10 minutes
+  // Timer
+  static const int sessionSeconds = 60;
   int _remaining = sessionSeconds;
   Timer? _timer;
 
-  @override
-  void initState() {
-    super.initState();
-    _startSessionTimer();
-  }
+  // Nudge
+  int _nudgeId = 1;
 
-  // ───────────────────────────────
-  // 🕒 Session Timer Logic
-  // ───────────────────────────────
+  // @override
+  // void initState() {
+  //   super.initState();
+  //   _startSessionTimer();
+  // }
+
   void _startSessionTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (_remaining <= 0) {
         t.cancel();
         _onSessionEnd();
       } else {
-        setState(() => _remaining--);
+        if (mounted) setState(() => _remaining--);
       }
     });
   }
 
   Future<void> _onSessionEnd() async {
-    await ApiService.logEvent(widget.userId, "session_end", {"duration": sessionSeconds});
-    if (!mounted) return;
-    _showFeedbackPopup();
+    await ApiService.endSession();
+    print("current session id is ${widget.sessionId}");
+
+    if (widget.sessionId.isEven) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => FeedbackPage(
+            userId: widget.userId,
+            sessionId: widget.sessionId,
+          ),
+        ),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => BreakPage(
+            userId: widget.userId,
+            breakDuration: const Duration(minutes: 5),
+            sessionId: widget.sessionId,
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -55,107 +88,74 @@ class _TaskPageState extends State<TaskPage> {
     super.dispose();
   }
 
-  // ───────────────────────────────
-  // ⚡️ Idle detection → show nudge
-  // ───────────────────────────────
-  void _handleIdle() async {
-    debugPrint("🕒 Idle detected! Fetching Persian nudge...");
-    try {
-      final nudge = await ApiService.getNextNudge(widget.userId);
-      if (!mounted) return;
-      setState(() {
-        _nudgeText = nudge ?? "،میخوای ادامه بدی؟یک لحظه چشماتو ببند و حسی که بعد از رسیدن به هدفت داری رو تصور کن";
-        _showNudge = true;
-      });
-      await ApiService.logEvent(widget.userId, "nudge_shown", {"nudge_text": _nudgeText});
-    } catch (e) {
-      debugPrint("⚠️ Error fetching nudge: $e");
-    }
+  // ──────────────────────────────
+  // Idle handling
+  // ──────────────────────────────
+
+  Future<void> _handleIdle() async {
+    debugPrint("🕒 Idle detected → Fetching nudge $_nudgeId");
+
+    final res = await ApiService.getNextNudge(widget.userId, _nudgeId);
+
+    if (!mounted) return;
+
+    setState(() {
+      _nudgeText = res?["message"] ??
+          "به حس خوبی که بعد از برداشتن این قدم و رسیدن به هدفت داری فکر کن";
+      _showNudge = true;
+      _nudgeId = res?["next_nudge_id"] ?? _nudgeId;
+    });
+
+    await ApiService.logEvent(widget.userId, "nudge_shown", {
+      "nudge_text": _nudgeText,
+    });
   }
 
   void _handleFocusReturn() {
-    debugPrint("🔙 Focus resumed, keeping nudge until dismissed manually");
+    debugPrint("🔙 Focus returned");
   }
 
-  // ───────────────────────────────
-  // 💬 Feedback popup after timer
-  // ───────────────────────────────
-  void _showFeedbackPopup() {
-    int rating = 3;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text(
-            "پایان تمرین 🎯",
-            style: TextStyle(fontFamily: 'Vazir'),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                "آیا پیام‌ ها بهت کمک کردند دوباره تمرکز کنی؟",
-                style: TextStyle(fontFamily: 'Vazir', fontSize: 16),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              Slider(
-                min: 1,
-                max: 5,
-                divisions: 4,
-                label: "$rating",
-                value: rating.toDouble(),
-                onChanged: (v) => setState(() => rating = v.toInt()),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () async {
-                await ApiService.logEvent(
-                  widget.userId,
-                  "session_feedback",
-                  {"rating": rating},
-                );
-                if (mounted) Navigator.pop(ctx);
-              },
-              child: const Text("ثبت بازخورد", style: TextStyle(fontFamily: 'Vazir')),
-            ),
-          ],
-        );
-      },
-    );
-  }
+  // ──────────────────────────────
+  // Build UI
+  // ──────────────────────────────
 
-  // ───────────────────────────────
-  // 🧱 Build UI
-  // ───────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Directionality(
       textDirection: TextDirection.ltr,
       child: IdleDetector(
         userId: widget.userId,
+        idleThreshold: const Duration(seconds: 20),
         onIdle: _handleIdle,
         onFocusReturn: _handleFocusReturn,
-        idleThreshold: const Duration(seconds: 20),
         child: Scaffold(
           backgroundColor: const Color(0xFFF5F0FF),
           appBar: AppBar(
             backgroundColor: Colors.deepPurple,
-            title: const Text("تمرین مطالعه", style: TextStyle(fontFamily: 'Vazir')),
+            elevation: 4,
+            title: const Text(
+              "۲ تمرین مطالعه",
+              style: TextStyle(
+                fontFamily: 'Vazir',
+                fontSize: 22,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             actions: [
-              // 🕒 Wrap timer in a ValueListenableBuilder-like pattern
               Padding(
                 padding: const EdgeInsets.only(right: 16),
                 child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 250),
-                  transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: child),
+                  duration: const Duration(milliseconds: 200),
+                  transitionBuilder: (child, anim) =>
+                      FadeTransition(opacity: anim, child: child),
                   child: Text(
                     _formatTime(_remaining),
                     key: ValueKey(_remaining),
-                    style: const TextStyle(fontFamily: 'Vazir', fontSize: 18),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontFamily: 'Vazir',
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
@@ -163,9 +163,8 @@ class _TaskPageState extends State<TaskPage> {
           ),
           body: Stack(
             children: [
-              // ⚡ Build content outside timer rebuilds
-              _contentCached ??= _buildContentArea(),
-              if (_showNudge) _buildNudgeOverlay(),
+              _buildContent(),
+              if (_showNudge) _nudgeOverlay(),
             ],
           ),
         ),
@@ -173,110 +172,120 @@ class _TaskPageState extends State<TaskPage> {
     );
   }
 
-  // Helper to format MM:SS
-  String _formatTime(int seconds) {
-    final m = (seconds ~/ 60).toString().padLeft(2, '0');
-    final s = (seconds % 60).toString().padLeft(2, '0');
+  String _formatTime(int sec) {
+    final m = (sec ~/ 60).toString().padLeft(2, '0');
+    final s = (sec % 60).toString().padLeft(2, '0');
     return "$m:$s";
   }
 
-// Cache for static content so it doesn't rebuild every tick
-Widget? _contentCached;
+  // ──────────────────────────────
+  // Content: PDF in a nice box
+  // ──────────────────────────────
 
-  // ───────────────────────────────
-  // 📖 Content display
-  // ───────────────────────────────
-  Widget _buildContentArea() {
-    return FutureBuilder<String>(
-      future: _loadReadingText(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: Colors.deepPurple));
-        } else if (snapshot.hasError) {
-          return const Center(child: Text("خطا در بارگذاری متن 😔", style: TextStyle(fontFamily: 'Vazir')));
-        } else {
-          final text = snapshot.data ?? "متنی برای نمایش وجود ندارد.";
-          return Container(
-            color: const Color(0xFFF5F0FF),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-            child: Center(
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 700),
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 12, offset: Offset(0, 6))],
-                ),
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  child: Text(
-                    text,
-                    textAlign: TextAlign.justify,
-                    style: const TextStyle(fontSize: 18, height: 1.9, fontFamily: 'Vazir', color: Colors.black87),
-                  ),
-                ),
-              ),
-            ),
-          );
-        }
-      },
-    );
-  }
+  Widget _buildContent() {
+    final pdfPath = widget.sessionNumber == 1
+        ? 'assets/docs/lesson1.pdf'
+        : 'assets/docs/lesson1.pdf';
 
-  Future<String> _loadReadingText() async {
-    try {
-      return await DefaultAssetBundle.of(context).loadString('assets/docs/lesson1.txt');
-    } catch (e) {
-      debugPrint("⚠️ Error loading text: $e");
-      return "خطا در بارگذاری فایل متن.";
-    }
-  }
-
-  // ───────────────────────────────
-  // 💬 Persian nudge overlay
-  // ───────────────────────────────
-  Widget _buildNudgeOverlay() {
-    return AnimatedOpacity(
-      opacity: _showNudge ? 1 : 0,
-      duration: const Duration(milliseconds: 400),
-      child: GestureDetector(
-        onTap: () => setState(() => _showNudge = false),
-        child: Container(
-          color: Colors.black54,
-          alignment: Alignment.center,
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: 900,  // small-ish box, not full screen
+            maxHeight: 600,
+          ),
           child: Container(
-            margin: const EdgeInsets.all(32),
-            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(20),
-              boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8, spreadRadius: 2)],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text("🌱", style: TextStyle(fontSize: 24, color: Colors.deepPurple, fontFamily: 'Vazir')),
-                const SizedBox(height: 16),
-                Text(
-                  _nudgeText ?? "",
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 18, fontFamily: 'Vazir'),
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () => setState(() => _showNudge = false),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurple,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: const Text("ادامه مطالعه", style: TextStyle(fontFamily: 'Vazir', color: Colors.white)),
+              boxShadow: const [
+                BoxShadow(
+                  blurRadius: 18,
+                  spreadRadius: 1,
+                  offset: Offset(0, 8),
+                  color: Color(0x22000000),
                 ),
               ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Directionality(
+                textDirection: TextDirection.ltr, // PDF layout
+                child: SfPdfViewer.asset(
+                  pdfPath,
+                  controller: _pdfController,
+                  canShowScrollHead: true,
+                  canShowScrollStatus: true,
+                  onDocumentLoaded: (_) => _startSessionTimer(),
+                ),
+              ),
             ),
           ),
         ),
       ),
     );
   }
+
+  // ──────────────────────────────
+  // Nudge popup
+  // ──────────────────────────────
+
+Widget _nudgeOverlay() {
+  return GestureDetector(
+    onTap: () => setState(() => _showNudge = false),
+    child: Container(
+      color: Colors.black54,
+      alignment: Alignment.center,
+      child: FractionallySizedBox(
+        widthFactor: 0.6,   // 60% of screen width → responsive
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: 380,   // never wider than this
+            maxHeight: 300,  // keep it like a dialog
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _nudgeText ?? "",
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontFamily: 'Vazir',
+                  ),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () => setState(() => _showNudge = false),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepPurple,
+                    minimumSize: const Size(120, 42),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text(
+                    "ادامه",
+                    style: TextStyle(
+                      fontFamily: 'Vazir',
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 }

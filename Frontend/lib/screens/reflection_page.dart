@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
-import 'task_page.dart';
+import 'home_page.dart';
 
 class ReflectionPage extends StatefulWidget {
   @override
@@ -47,7 +47,7 @@ class _ReflectionPageState extends State<ReflectionPage> {
       "q3_possible_obstacles": obstaclesController.text,
       "q4_future_visualization": visionController.text,
       "q5_if_give_up": ifGiveUpController.text,
-      "q6_notes": notesController.text,
+      "q6_notes": "",
     };
 
     try {
@@ -118,14 +118,14 @@ class _ReflectionPageState extends State<ReflectionPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Text(
-                    "🎯 هدف اصلی: رسیدن به تسلط زبانی برای آزمون IELTS",
+                    " هدف اصلی: رسیدن به تسلط زبانی برای آزمون زبان (IELTS, TOFEL, ..)",
                     style:
                         TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    "لطفاً برای هر سؤال، پاسخ خود را با جزئیات بنویسید — به‌ویژه بخش‌های که مربوط به احساساتتان است، تا هوش مصنوعی بتواند انگیزه و بازخورد دقیق‌تری ایجاد کند. هر بخش می تواند چند جواب داشته باشد💬",
+                    "لطفاً برای هر سؤال، پاسخ خود را با جزئیات بنویسید — به‌ویژه بخش‌های که مربوط به احساساتتان است، تا هوش مصنوعی بتواند انگیزه و بازخورد دقیق‌تری ایجاد کند. هر بخش می تواند چند جواب داشته باشد",
                     style: TextStyle(fontSize: 15, height: 1.6),
                     textAlign: TextAlign.center,
                   ),
@@ -134,7 +134,7 @@ class _ReflectionPageState extends State<ReflectionPage> {
                   _buildQuestionBlock(
                     "چرا این هدف برایت مهم است؟",
                     whyController,
-                    "مثلاً: چون با نمره‌ی بالا در IELTS می‌توانم در دانشگاه مورد علاقه‌ام تحصیل کنم و به رؤیای مهاجرت نزدیک شوم.",
+                    "مثلاً: چون با نمره‌ی بالا در زبان خوب می‌توانم در دانشگاه مورد علاقه‌ام تحصیل کنم و به رؤیای مهاجرت نزدیک شوم.",
                   ),
                   _buildQuestionBlock(
                     "چه زمانی می خواهی به هدفت برسی؟",
@@ -149,18 +149,18 @@ class _ReflectionPageState extends State<ReflectionPage> {
                   _buildQuestionBlock(
                     "اگر موفق شوی، آینده‌ات را چطور می‌بینی؟",
                     visionController,
-                    "مثلاً: خودم را می‌بینم که در آمریکا زندگی می‌کنم و با آرامش و اعتماد به‌نفس صحبت می‌کنم. ایمیل پذیرش دانشگاه را دریافت کردم و خانواده ام به من افتخار میکنند. ",
+                    "مثلاً: خودم را می‌بینم که در کانادا زندگی می‌کنم و با آرامش و اعتماد به‌نفس صحبت می‌کنم. ایمیل پذیرش دانشگاه را دریافت کردم و خانواده ام به من افتخار میکنند. ",
                   ),
                   _buildQuestionBlock(
                     "اگر به این هدف نرسی عواقب آن چیست و چه احساسی در آن لحظه خواهی داشت؟ ",
                     ifGiveUpController,
                     "مثلاً: احساس ناامیدی میکنم، زیان مالی خواهم دید و از برنامه ام عقب می افتم.",
                   ),
-                  _buildQuestionBlock(
-                    "یادداشت یا توضیح اضافه‌ای داری؟",
-                    notesController,
-                    "هر چیز دیگری که به ذهنت می‌رسد یا می‌خواهی اضافه کنی.",
-                  ),
+                  // _buildQuestionBlock(
+                  //   "یادداشت یا توضیح اضافه‌ای داری؟",
+                  //   notesController,
+                  //   "هر چیز دیگری که به ذهنت می‌رسد یا می‌خواهی اضافه کنی.",
+                  // ),
 
                   const SizedBox(height: 25),
                   ElevatedButton(
@@ -181,27 +181,7 @@ class _ReflectionPageState extends State<ReflectionPage> {
                                 TextStyle(fontSize: 18, color: Colors.white),
                           ),
                   ),
-                  TextButton(
-                    onPressed: () async{
-
-                      final prefs = await SharedPreferences.getInstance();
-                      final userId = prefs.getInt('user_id');
-
-                      if (userId != null) {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (_) => TaskPage(userId: userId)),
-                        );
-                      }
-
-
-
-                    },
-                    child: const Text(
-                      "⏭ رفتن به صفحه تمرین (برای تست)",
-                      style: TextStyle(color: Colors.deepPurple),
-                    ),
-                  ),
+          
 
                   if (_nudgeText != null)
                     Padding(

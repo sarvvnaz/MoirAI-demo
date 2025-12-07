@@ -36,25 +36,19 @@ dependencies:
   lottie: ^3.3.1 
   web_socket_channel: ^3.0.3
   file_picker: ^10.3.3
-  syncfusion_flutter_pdfviewer: ^31.1.19
   shared_preferences: ^2.2.3 
-
-
-
-
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
+  path_provider: ^2.0.1 
+  json_annotation: ^4.0.0 
   cupertino_icons: ^1.0.8
+  flutter_local_notifications: ^17.2.1
+  path: ^1.9.0
+  pdfx: ^2.6.0 
+  syncfusion_flutter_pdfviewer: ^31.2.15
+
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
-  # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of your
-  # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
   flutter_lints: ^6.0.0
 
 # For information on the generic Dart part of this file, see the
@@ -72,8 +66,9 @@ flutter:
   assets:
     - assets/langs/
     - assets/animations/
-    - assets/docs/lesson1.pdf 
-    - assets/docs/lesson1.txt
+    - assets/docs/
+    - assets/bin/macos/backend
+    - assets/bin/windows/backend.exe
 
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg

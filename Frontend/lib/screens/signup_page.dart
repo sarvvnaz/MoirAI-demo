@@ -9,10 +9,8 @@ class SignUpPage extends StatefulWidget {
 class _SignUpPageState extends State<SignUpPage> {
   final _formKey = GlobalKey<FormState>();
 
-  final TextEditingController usernameController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
+  final TextEditingController emailController = TextEditingController();
   final TextEditingController nameController = TextEditingController();
-  final TextEditingController goalController = TextEditingController();
 
   bool _loading = false;
 
@@ -22,10 +20,10 @@ class _SignUpPageState extends State<SignUpPage> {
     setState(() => _loading = true);
 
     final data = {
-      "username": usernameController.text,
-      "password": passwordController.text,
+      "email": emailController.text,
+  
       "full_name_fa": nameController.text,
-      "english_goal": goalController.text,
+
     };
 
     final response = await ApiService.signup(data);
@@ -45,63 +43,112 @@ class _SignUpPageState extends State<SignUpPage> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
+Widget build(BuildContext context) {
+  return Directionality(
+    textDirection: TextDirection.rtl,
+    child: Scaffold(
       backgroundColor: const Color(0xFFF5F0FF),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const SizedBox(height: 40),
-                Text(
-                  "ایجاد حساب کاربری",
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 40),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              double screenWidth = constraints.maxWidth;
 
-                _buildField("نام ", nameController, "به فارسی، مثلا سارا"),
-                _buildField("نام کاربری", usernameController, ""),
-                _buildField("هدف یادگیری زبان انگلیسی", goalController,
-                    "7.5 مثلاً برای آیلتس"),
-                _buildField("رمز عبور", passwordController, "حداقل ۶ کاراکتر",
-                    obscureText: true),
+              double formWidth;
+              if (screenWidth < 600) {
+                // Mobile
+                formWidth = screenWidth * 0.9;
+              } else if (screenWidth < 1100) {
+                // Tablet
+                formWidth = screenWidth * 0.6;
+              } else {
+                // Desktop
+                formWidth = screenWidth * 0.3;
+              }
 
-                const SizedBox(height: 30),
-                ElevatedButton(
-                  onPressed: _loading ? null : _signup,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurple,
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 14, horizontal: 60),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+              return Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: formWidth,
                   ),
-                  child: _loading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text(
-                          "ثبت‌نام",
-                          style: TextStyle(fontSize: 18, color: Colors.white),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const SizedBox(height: 40),
+
+                        const Text(
+                          "ایجاد حساب کاربری",
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
+
+                        const SizedBox(height: 40),
+
+                        _buildField(
+                          "ایمیل",
+                          emailController,
+                          "لطفا آدرس ایمیل خود را وارد کنید",
+                        ),
+
+                        _buildField(
+                          "نام",
+                          nameController,
+                          "به فارسی، مثلا سارا",
+                        ),
+
+                        const SizedBox(height: 30),
+
+                        ElevatedButton(
+                          onPressed: _loading ? null : _signup,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.deepPurple,
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 14,
+                              horizontal: 60,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: _loading
+                              ? const CircularProgressIndicator(
+                                  color: Colors.white,
+                                )
+                              : const Text(
+                                  "ثبت‌نام",
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        TextButton(
+                          onPressed: () => Navigator.pushReplacementNamed(
+                            context,
+                            '/login',
+                          ),
+                          child: const Text("قبلاً ثبت‌نام کرده‌اید؟ ورود"),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 20),
-                TextButton(
-                  onPressed: () =>
-                      Navigator.pushReplacementNamed(context, '/login'),
-                  child: const Text("قبلاً ثبت‌نام کرده‌اید؟ ورود"),
-                ),
-              ],
-            ),
+              );
+            },
           ),
         ),
       ),
-    ));
-  }
+    ),
+  );
+}
 
   Widget _buildField(String label, TextEditingController controller, String hint,
       {bool obscureText = false}) {
