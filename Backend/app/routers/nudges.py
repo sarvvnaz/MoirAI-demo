@@ -35,49 +35,61 @@ def edit_nudge(
 
 
 
-@router.get("/{user_id}/{nudge_id}", status_code=status.HTTP_200_OK)
+@router.get("/{user_id}/{nudge_number}", status_code=status.HTTP_200_OK)
 def get_and_increment_nudge(
     user_id: int,
-    nudge_id: int,
+    nudge_number: int,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    # 🧠 ensure this user can access only their own nudges
+    # 🔒 1. Ensure user is accessing their own nudges
     if current_user.id != user_id:
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    # 🧩 fetch nudges for user
+    # 📥 2. Fetch all nudges for this user
     nudges = (
         db.query(models.Nudge)
         .filter(models.Nudge.user_id == user_id)
-        .order_by(models.Nudge.id.asc())
+        .order_by(models.Nudge.nudge_number.asc())
         .all()
     )
+
     if not nudges:
         raise HTTPException(status_code=404, detail="No nudges found")
 
-    # 🧮 find current nudge in list
-    current_index = next((i for i, n in enumerate(nudges) if n.id == nudge_id), None)
-    if current_index is None:
-        raise HTTPException(status_code=404, detail=f"Nudge {nudge_id} not found")
+    # ❌ invalid request (index out of range)
+    if nudge_number < 0 or nudge_number >= len(nudges):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Nudge {nudge_number} not found for this user"
+        )
 
-    current_nudge = nudges[current_index]
-    next_index = (current_index + 1) % len(nudges)
-    next_nudge = nudges[next_index]
+    # 🎯 3. Get current nudge
+    current_nudge = nudges[nudge_number]
 
-    # 🧾 log the event
+    # 🔁 4. Determine next nudge (cycle to 0)
+    next_nudge_number = (nudge_number + 1) % len(nudges)
+
+    # 📝 5. Log event
     db.add(models.EventLog(
         user_id=user_id,
         event_type="nudge_shown",
-        details={"nudge_id": current_nudge.id, "timestamp": datetime.utcnow().isoformat()},
+        details={
+            "nudge_number": current_nudge.nudge_number,
+            "timestamp": datetime.utcnow().isoformat()
+        }
     ))
     db.commit()
 
-    print(f"💬 Served nudge #{current_index + 1}/{len(nudges)} for {current_user.id}: {current_nudge.text[:60]}…")
+    print(
+        f"💬 Served nudge {current_nudge.nudge_number}/{len(nudges)-1} "
+        f"for user={current_user.id}: {current_nudge.text[:60]}..."
+    )
 
+    # 📤 6. Return response
     return {
-        "id": current_nudge.id,
-        "type": current_nudge.type,
+        "nudge_number": current_nudge.nudge_number,
         "message": current_nudge.text.strip(),
-        "next_nudge_id": next_nudge.id
+        "type": current_nudge.type,
+        "next_nudge_number": next_nudge_number
     }

@@ -35,6 +35,11 @@ def submit_eft(
 
     # Generate + parse + save nudges
     saved_msgs: list[str] = []
+    
+    existing_count = db.query(models.Nudge).filter(
+    models.Nudge.user_id == current_user.id
+).count()
+
     for i in range(2):
         try:
             _, raw = generate_nudge(
@@ -49,9 +54,10 @@ def submit_eft(
                 continue
             print(f"💡 Parsed {msgs} messages from nudge set {i+1}")
 
-            for msg in msgs:
+            for index, msg in enumerate(msgs):
                 db.add(models.Nudge(
                     user_id=current_user.id,
+                    nudge_number=existing_count + index,
                     type="positive",   # or detect from parsed JSON if you prefer
                     source="ai",
                     text=msg,          # <-- only the message text
@@ -59,6 +65,7 @@ def submit_eft(
                 saved_msgs.append(msg)
 
             print(f"✅ Stored {len(msgs)} messages from nudge set {i+1}")
+            existing_count += len(msgs)
 
         except Exception as e:
             print(f"⚠️ Error generating nudge {i+1}: {e}")
