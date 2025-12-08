@@ -103,7 +103,8 @@ class _TaskPageState extends State<TaskPage> {
       _nudgeText = res?["message"] ??
           "به حس خوبی که بعد از برداشتن این قدم و رسیدن به هدفت داری فکر کن";
       _showNudge = true;
-      _nudgeId = res?["next_nudge_id"] ?? _nudgeId;
+      _nudgeId = res?["next_nudge_number"] ?? _nudgeId;
+      print(  "Next nudge id: $res?['next_nudge_number']");
     });
 
     await ApiService.logEvent(widget.userId, "nudge_shown", {

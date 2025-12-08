@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:neuronudge/screens/reflection_page.dart';
 import '../services/api_service.dart';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SignUpPage extends StatefulWidget {
   @override
@@ -31,15 +34,41 @@ class _SignUpPageState extends State<SignUpPage> {
     setState(() => _loading = false);
 
     if (response.statusCode == 200 || response.statusCode == 201) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("ثبت‌نام با موفقیت انجام شد ✅")),
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text("ثبت‌نام با موفقیت انجام شد، در حال ورود... ✅")),
+  );
+
+  // 🔥 AUTO LOGIN USING EMAIL (same as in login_page)
+  final loginResponse = await ApiService.login({
+    "email": emailController.text.trim(),
+  });
+
+  if (loginResponse.statusCode == 200) {
+    final body = jsonDecode(loginResponse.body);
+
+    if (body['access_token'] != null && body['user'] != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('access_token', body['access_token']);
+      await prefs.setInt('user_id', body['user']['id']);
+
+      Navigator.pushReplacement(context, 
+        MaterialPageRoute(builder: (_) => ReflectionPage(
+            userId: body['user']['id'],
+          ),
+        ),
       );
-      Navigator.pushReplacementNamed(context, '/reflection');
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("خطا در ثبت‌نام ❌")),
+        const SnackBar(content: Text("❌ پاسخ نامعتبر از سرور هنگام ورود خودکار")),
       );
     }
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("❌ ورود خودکار پس از ثبت‌نام انجام نشد")),
+    );
+  }
+}
+
   }
 
   @override

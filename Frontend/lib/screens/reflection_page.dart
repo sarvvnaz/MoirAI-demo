@@ -5,6 +5,8 @@ import '../services/api_service.dart';
 import 'home_page.dart';
 
 class ReflectionPage extends StatefulWidget {
+final int userId;
+const ReflectionPage({Key? key, required this.userId}) : super(key: key);
   @override
   _ReflectionPageState createState() => _ReflectionPageState();
 }
@@ -78,7 +80,7 @@ class _ReflectionPageState extends State<ReflectionPage> {
         child: AlertDialog(
           backgroundColor: Colors.white,
           title: const Text(
-            "✨ نکته انگیزشی برای شما ✨",
+            "",
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
             textAlign: TextAlign.center,
           ),
@@ -88,7 +90,16 @@ class _ReflectionPageState extends State<ReflectionPage> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () async {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => HomePage(
+                      userId: widget.userId,
+                    ),
+                  ),
+                );
+              },
               child: const Text("ادامه بده"),
             ),
           ],
