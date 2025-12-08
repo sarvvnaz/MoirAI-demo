@@ -8,27 +8,28 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart' show LocalBackend;
 
 class ApiService {
+  static Uri _u(String path) => Uri.parse('http://127.0.0.1:8000$path');
   static const _timeout = Duration(seconds: 12);
   static int _localNudgeIndex = 0; // (kept from your code)
 
-  // 🔹 NEW: choose base URL depending on platform
-  static Uri get _base {
-    if (kIsWeb) {
-      // On web: use same origin as the loaded page
-      final uri = Uri.base;
-      return Uri(
-        scheme: uri.scheme,
-        host: uri.host,
-        port: uri.hasPort ? uri.port : null,
-      );
-    } else {
-      // On desktop/mobile/local dev: use your LocalBackend (127.0.0.1:8765 etc.)
-      return LocalBackend.baseUrl;
-    }
-  }
+  // choose base URL depending on platform
+  // static Uri get _base {
+  //   if (kIsWeb) {
+  //     // On web: use same origin as the loaded page
+  //     final uri = Uri.base;
+  //     return Uri(
+  //       scheme: uri.scheme,
+  //       host: uri.host,
+  //       port: uri.hasPort ? uri.port : null,
+  //     );
+  //   } else {
+  //     // On desktop/mobile/local dev: use your LocalBackend (127.0.0.1:8765 etc.)
+  //     return LocalBackend.baseUrl;
+  //   }
+  // }
 
-  // 🔹 UPDATED: build URLs off _base instead of hardcoded 127.0.0.1
-  static Uri _u(String path) => _base.replace(path: path);
+  // build URLs off _base instead of hardcoded 127.0.0.1
+  // static Uri _u(String path) => _base.replace(path: path);
 
   // ───────────────────────────────
   // Auth
