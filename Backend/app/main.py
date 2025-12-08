@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database.db_setup import Base, engine
-from app.database import models
 from app.routers import auth, eft, nudges, events
 from app.routers import events
 import app.routers.sessions as sessions
@@ -27,5 +26,5 @@ app.include_router(events.router)
 print(app.routes)
 
 # 🔹 Serve Flutter build at ROOT
-app.mount("/", StaticFiles(directory="web", html=True), name="web")
+# app.mount("/", StaticFiles(directory="web", html=True), name="web")
 
