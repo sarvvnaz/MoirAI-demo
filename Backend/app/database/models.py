@@ -8,7 +8,7 @@ from sqlalchemy import (
     String, Integer, Float, DateTime, func, ForeignKey, Text, JSON, Enum, Index, Column, UniqueConstraint
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from .base_class import Base
+from .db_setup import Base
 # ─────────────────────────────
 # USER
 
@@ -115,6 +115,7 @@ class Nudge(Base):
     __table_args__ = (Index("ix_nudge_user_created", "user_id", "created_at"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    nudge_number: Mapped[int] = mapped_column(Integer, nullable=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     type: Mapped[str] = mapped_column(Enum("positive", "negative", name="nudge_type"), nullable=False)
     source: Mapped[str] = mapped_column(Enum("ai", "manual", name="nudge_source"), default="ai")
