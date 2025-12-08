@@ -6,6 +6,7 @@ import 'dart:convert';
 // IMPORTANT: Only import dart:io on non-web platforms
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:neuronudge/screens/home_page.dart';
 import 'package:path/path.dart' as p;
 import 'screens/login_page.dart';
 import 'screens/signup_page.dart';
@@ -138,7 +139,12 @@ class NeuroNudgeApp extends StatelessWidget {
       routes: {
         '/login': (_) => LoginPage(),
         '/signup': (_) => SignUpPage(),
-        '/reflection': (_) => ReflectionPage(),
+        '/reflection': (_) => ReflectionPage(
+              userId: 0,
+        ),
+        '/home': (_) => HomePage(
+              userId: 0,
+            ),
         '/break': (_) => BreakPage(
               userId: 0,
               breakDuration: const Duration(seconds: 10),
