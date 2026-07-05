@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import models
 from app.database.db_setup import get_db
 from app.services.ai_service import generate_nudge
+from app.services.eft_chat_service import EFTChatService
 from app.services.security import get_current_user
 from app.utils.nudge_parser import extract_nudge_messages  
 
@@ -22,12 +23,11 @@ def submit_eft(
     # Save EFT
     eft = models.EFTResponse(
         user_id=current_user.id,
-        q1_why_goal_matters=data.get("q1_why_goal_matters"),
-        q2_when_reach_goal=data.get("q2_when_reach_goal"),
-        q3_possible_obstacles=data.get("q3_possible_obstacles"),
-        q4_future_visualization=data.get("q4_future_visualization"),
-        q5_if_give_up=data.get("q5_if_give_up"),
-        q6_notes=data.get("q6_notes"),
+        timeFrame=data.get("timeFrame"),
+        place=data.get("place"),
+        activities=data.get("activities"),
+        people=data.get("people"),
+        feelings=data.get("feelings"),
     )
     db.add(eft)
     db.commit()
@@ -40,11 +40,12 @@ def submit_eft(
     models.Nudge.user_id == current_user.id
 ).count()
 
-    for i in range(2):
+    for i in range(2): # Generate 2 sets of nudges
         try:
             _, raw = generate_nudge(
                 data,
                 user_name=current_user.full_name_fa,
+                exam_goal=current_user.examGoal or "موفقیت در زبان انگلیسی",
                 
             )
 
@@ -73,3 +74,92 @@ def submit_eft(
     db.commit()
 
     return {"message": "EFT saved. Nudges parsed & stored.", "nudges": saved_msgs}
+
+# ----------------------------------------------------------------------------
+# New endpoint: save structured episode
+# ----------------------------------------------------------------------------
+@router.post("/episode", status_code=status.HTTP_201_CREATED)
+def save_eft_episode(
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """
+    Saves a structured EFT episode for the current user. The request body
+    should include an `episode` field containing the episode JSON object.
+
+    Example request body:
+      {
+        "episode": {
+          ... as defined in the frontend episode schema ...
+        }
+      }
+
+    The episode is stored as a JSON string in the EFTEpisode table.
+    """
+    if current_user is None:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    episode_data = data.get("episode")
+    if episode_data is None:
+        raise HTTPException(status_code=422, detail="Missing episode data")
+
+    try:
+        # Serialise to JSON string to persist
+        import json as _json
+        episode_json_str = _json.dumps(episode_data, ensure_ascii=False)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Invalid episode JSON: {e}")
+
+    episode = models.EFTEpisode(
+        user_id=current_user.id,
+        episode_json=episode_json_str,
+    )
+    db.add(episode)
+    db.commit()
+    db.refresh(episode)
+
+    return {"ok": True, "episode_id": episode.id}
+
+
+# ----------------------------------------------------------------------------
+# Backend-driven EFT chat
+# ----------------------------------------------------------------------------
+@router.post("/chat", status_code=status.HTTP_200_OK)
+def eft_chat(
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if current_user is None:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    message = data.get("message")
+    client_version = data.get("client_version", "")
+    reset = bool(data.get("reset", False))
+
+    service = EFTChatService(db, current_user.id)
+    result = service.process_message(message, client_version=client_version, reset=reset)
+    db.commit()
+    return result
+
+
+@router.post("/reset", status_code=status.HTTP_200_OK)
+def eft_chat_reset(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if current_user is None:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    service = EFTChatService(db, current_user.id)
+    service._reset_state()
+    first = service._ask_question(1, {})
+    db.commit()
+    return {
+        "bot": first,
+        "step": 1,
+        "needs_user": True,
+        "can_start_session": False,
+        "episode_summary": None,
+    }

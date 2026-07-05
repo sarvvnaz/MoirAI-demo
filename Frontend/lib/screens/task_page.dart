@@ -1,11 +1,16 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:neuronudge/screens/break_page.dart';
+import 'package:moirai/screens/break_page.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import '../services/api_service.dart';
 import '../services/idle_detector.dart';
 import 'feedback_page.dart';
+import '../widgets/custom_app_bar.dart';
+// We keep importing dart:html for PDF progress tracking only. js_util and
+// notifications are no longer used since nudges and notifications were
+// removed from the study prototype.
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:html' as html;
 
 class TaskPage extends StatefulWidget {
   final int userId;
@@ -26,22 +31,20 @@ class TaskPage extends StatefulWidget {
 class _TaskPageState extends State<TaskPage> {
   final PdfViewerController _pdfController = PdfViewerController();
 
-  bool _showNudge = false;
-  String? _nudgeText;
+  int _pageCount = 0;
+  int _currentPage = 1;
 
   // Timer
-  static const int sessionSeconds = 60;
+  static const int sessionSeconds = 1200;
   int _remaining = sessionSeconds;
   Timer? _timer;
+  Color _timerColor = const Color.fromARGB(255, 255, 255, 255);
 
-  // Nudge
-  int _nudgeId = 1;
-
-  // @override
-  // void initState() {
-  //   super.initState();
-  //   _startSessionTimer();
-  // }
+  @override
+  void initState() {
+    super.initState();
+    // No need to request notification permissions; nudges and notifications are disabled.
+  }
 
   void _startSessionTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
@@ -54,17 +57,27 @@ class _TaskPageState extends State<TaskPage> {
     });
   }
 
+  void _pauseTimer() {
+    _timer?.cancel();
+  }
+
+  void _resumeTimer() {
+    _startSessionTimer();
+  }
+
   Future<void> _onSessionEnd() async {
     await ApiService.endSession();
-    print("current session id is ${widget.sessionId}");
-
-    if (widget.sessionId.isEven) {
+    // Decide whether to break or finish based on the session number. If this is
+    // the first session (sessionNumber == 1), take a break and then start
+    // another session. Otherwise (sessionNumber >= 2), proceed to the
+    // feedback page to conclude the study.
+    if (widget.sessionNumber >= 2) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (_) => FeedbackPage(
             userId: widget.userId,
-            sessionId: widget.sessionId,
+            sessionNumber: widget.sessionNumber,
           ),
         ),
       );
@@ -82,39 +95,15 @@ class _TaskPageState extends State<TaskPage> {
     }
   }
 
+
   @override
   void dispose() {
     _timer?.cancel();
     super.dispose();
   }
 
-  // ──────────────────────────────
-  // Idle handling
-  // ──────────────────────────────
-
-  Future<void> _handleIdle() async {
-    debugPrint("🕒 Idle detected → Fetching nudge $_nudgeId");
-
-    final res = await ApiService.getNextNudge(widget.userId, _nudgeId);
-
-    if (!mounted) return;
-
-    setState(() {
-      _nudgeText = res?["message"] ??
-          "به حس خوبی که بعد از برداشتن این قدم و رسیدن به هدفت داری فکر کن";
-      _showNudge = true;
-      _nudgeId = res?["next_nudge_number"] ?? _nudgeId;
-      print(  "Next nudge id: $res?['next_nudge_number']");
-    });
-
-    await ApiService.logEvent(widget.userId, "nudge_shown", {
-      "nudge_text": _nudgeText,
-    });
-  }
-
-  void _handleFocusReturn() {
-    debugPrint("🔙 Focus returned");
-  }
+  // Idle callbacks removed — nudges are disabled in this version. IdleDetector
+  // will continue to log idle and focus events automatically via ApiService.
 
   // ──────────────────────────────
   // Build UI
@@ -127,21 +116,13 @@ class _TaskPageState extends State<TaskPage> {
       child: IdleDetector(
         userId: widget.userId,
         idleThreshold: const Duration(seconds: 20),
-        onIdle: _handleIdle,
-        onFocusReturn: _handleFocusReturn,
         child: Scaffold(
           backgroundColor: const Color(0xFFF5F0FF),
-          appBar: AppBar(
-            backgroundColor: Colors.deepPurple,
-            elevation: 4,
-            title: const Text(
-              "۲ تمرین مطالعه",
-              style: TextStyle(
-                fontFamily: 'Vazir',
-                fontSize: 22,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+          appBar: CustomAppBar(
+            title: "تمرین مطالعه ",
+            timerText: _formatTime(_remaining),
+            timerColor: _timerColor,
+            isDimmed: false,
             actions: [
               Padding(
                 padding: const EdgeInsets.only(right: 16),
@@ -152,7 +133,8 @@ class _TaskPageState extends State<TaskPage> {
                   child: Text(
                     _formatTime(_remaining),
                     key: ValueKey(_remaining),
-                    style: const TextStyle(
+                    style: TextStyle(
+                      color: _timerColor,
                       fontSize: 20,
                       fontFamily: 'Vazir',
                       fontWeight: FontWeight.bold,
@@ -164,8 +146,36 @@ class _TaskPageState extends State<TaskPage> {
           ),
           body: Stack(
             children: [
+              Positioned(
+                bottom: 12,
+                left: 0,
+                right: 0,
+                child: IgnorePointer(
+                  child: AnimatedOpacity(
+                    opacity: 0.85,
+                    duration: const Duration(milliseconds: 300),
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          '$_currentPage / $_pageCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
               _buildContent(),
-              if (_showNudge) _nudgeOverlay(),
             ],
           ),
         ),
@@ -184,10 +194,27 @@ class _TaskPageState extends State<TaskPage> {
   // ──────────────────────────────
 
   Widget _buildContent() {
-    final pdfPath = widget.sessionNumber == 1
+
+    final _pdfPath = widget.sessionNumber == 1
         ? 'assets/docs/lesson1.pdf'
         : 'assets/docs/lesson1.pdf';
+    String _progressKey() {
+      // final pdfPath = widget.sessionNumber == 1
+      //     ? 'lesson1.pdf'
+      //     : 'lesson2.pdf';
+      return 'moirai:pdf_progress:user=${widget.userId}:pdf=$_pdfPath';
+    }
 
+    void _saveLastPage(int page) {
+      html.window.localStorage[_progressKey()] = page.toString();
+
+    }
+
+    int? _loadLastPage() {
+      final v = html.window.localStorage[_progressKey()];
+
+      return v == null ? null : int.tryParse(v);
+    }
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -214,79 +241,53 @@ class _TaskPageState extends State<TaskPage> {
               child: Directionality(
                 textDirection: TextDirection.ltr, // PDF layout
                 child: SfPdfViewer.asset(
-                  pdfPath,
-                  controller: _pdfController,
-                  canShowScrollHead: true,
-                  canShowScrollStatus: true,
-                  onDocumentLoaded: (_) => _startSessionTimer(),
+                    _pdfPath,
+                    controller: _pdfController,
+                    canShowScrollHead: true,
+                    canShowScrollStatus: true,
+
+                    onDocumentLoaded: (details) {
+                      if (!mounted) return;
+
+                      setState(() {
+                        _pageCount = details.document.pages.count;
+                      });
+
+                      // start timer once (only if not already started)
+                      if (_timer == null) {
+                        _startSessionTimer();
+                      }
+
+                      // resume page
+                      final savedPage = _loadLastPage();
+                      if (savedPage != null && savedPage >= 1 && savedPage <= _pageCount) {
+                        _pdfController.jumpToPage(savedPage);
+
+                        // optional: update UI immediately
+                        setState(() => _currentPage = savedPage);
+                      }
+                    },
+
+                    onPageChanged: (details) {
+                      if (!mounted) return;
+
+                      setState(() => _currentPage = details.newPageNumber);
+
+                      // persist progress
+                      _saveLastPage(details.newPageNumber);
+                    },
+                  ),
+
+                                  
                 ),
               ),
             ),
           ),
         ),
-      ),
-    );
+      );
+    
   }
 
-  // ──────────────────────────────
-  // Nudge popup
-  // ──────────────────────────────
-
-Widget _nudgeOverlay() {
-  return GestureDetector(
-    onTap: () => setState(() => _showNudge = false),
-    child: Container(
-      color: Colors.black54,
-      alignment: Alignment.center,
-      child: FractionallySizedBox(
-        widthFactor: 0.6,   // 60% of screen width → responsive
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: 380,   // never wider than this
-            maxHeight: 300,  // keep it like a dialog
-          ),
-          child: Container(
-            padding: const EdgeInsets.all(22),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  _nudgeText ?? "",
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontFamily: 'Vazir',
-                  ),
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () => setState(() => _showNudge = false),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurple,
-                    minimumSize: const Size(120, 42),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: const Text(
-                    "ادامه",
-                    style: TextStyle(
-                      fontFamily: 'Vazir',
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    ),
-  );
-}
+  // Nudge overlay removed — nudges are disabled in this version.
 
 }

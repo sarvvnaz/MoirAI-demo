@@ -60,4 +60,9 @@ def me(current_user: models.User = Depends(get_current_user)):
         "email": current_user.email,
         "full_name_fa": current_user.full_name_fa,
         "created_at": current_user.created_at,
+        "age": current_user.age,
+        "gender": current_user.gender,
+        "degree": current_user.degree,
+        "examGoal": current_user.examGoal,
+        "studyHoursPerWeek": current_user.studyHoursPerWeek,
     }

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import 'home_page.dart';
-
+import '../widgets/custom_app_bar.dart';
 class ReflectionPage extends StatefulWidget {
 final int userId;
 const ReflectionPage({Key? key, required this.userId}) : super(key: key);
@@ -33,7 +33,7 @@ class _ReflectionPageState extends State<ReflectionPage> {
     });
 
     final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access_token');
+    final token = await ApiService.getToken();
 
     if (token == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -111,21 +111,49 @@ class _ReflectionPageState extends State<ReflectionPage> {
   @override
   Widget build(BuildContext context)  {
     return Directionality(
-      textDirection: TextDirection.rtl, // ✅ Persian RTL layout
+       
+      textDirection: TextDirection.rtl, // ✅ Persian-friendly
       child: Scaffold(
-        backgroundColor: const Color(0xFFF5F0FF),
-        appBar: AppBar(
-          title: const Text("تفکر آینده‌محور"),
-          backgroundColor: Colors.deepPurple,
-          centerTitle: true,
-          elevation: 0,
+        appBar: CustomAppBar(
+          title: "تفکر آینده محور",
         ),
-        body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Form(
-              key: _formKey,
-              child: Column(
+        backgroundColor: const Color(0xFFF5F0FF), // pastel purple-ish
+        body: Stack(
+          children: [
+            Opacity(
+                opacity: 0.3,
+                child: SizedBox.expand(child: Image.asset(
+                  'assets/images/purple_background.png',
+                  fit: BoxFit.cover,
+                  
+            ),)),
+            SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 720),
+                    child: Form(
+                      key: _formKey,
+                      child: 
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Card with text box
+                          Container(
+                            padding: const EdgeInsets.all(18),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x14000000),
+                                  blurRadius: 14,
+                                  offset: Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                          child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Text(
@@ -207,9 +235,18 @@ class _ReflectionPageState extends State<ReflectionPage> {
                 ],
               ),
             ),
-          ),
+            
+              ],
+                    ),
+                  ),
+                ),
         ),
       ),
+    ),
+            
+          ],
+      ),
+    ),
     );
   }
 
@@ -243,7 +280,7 @@ class _ReflectionPageState extends State<ReflectionPage> {
             textAlign: TextAlign.right,
             decoration: InputDecoration(
               filled: true,
-              fillColor: Colors.deepPurple.shade50,
+              fillColor: const Color.fromARGB(255, 253, 251, 255),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
@@ -266,3 +303,4 @@ class _ReflectionPageState extends State<ReflectionPage> {
     );
   }
 }
+

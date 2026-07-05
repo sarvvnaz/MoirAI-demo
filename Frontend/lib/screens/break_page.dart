@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:neuronudge/services/api_service.dart';
+import 'package:moirai/services/api_service.dart';
 import 'task_page.dart'; 
-
+import '../widgets/custom_app_bar.dart';
 class BreakPage extends StatefulWidget {
   final int userId;
   final Duration breakDuration;
@@ -98,39 +98,78 @@ Future<void> _goToNextSession() async {
     final minutes = _remaining.inMinutes.remainder(60).toString().padLeft(2, '0');
     final seconds = _remaining.inSeconds.remainder(60).toString().padLeft(2, '0');
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Break"),
-        automaticallyImplyLeading: false,
-      ),
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              "وقت استراحت 🤍",
-              style: TextStyle(fontSize: 22),
-              textAlign: TextAlign.center,
+    return Stack(
+      children: [
+        // Background image
+        Positioned.fill(
+          child: Opacity(
+            opacity: 0.2,
+            child: Image.asset(
+              'assets/images/nature_bg.png',
+              fit: BoxFit.cover,
             ),
-            const SizedBox(height: 16),
-            Text(
-              "$minutes:$seconds",
-              style: const TextStyle(fontSize: 40, fontFeatures: [FontFeature.tabularFigures()]),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              "تا ۵ دقیقه به خودت استراحت بده.\n"
-              "بعد از تموم شدن، خودکار می‌ریم سر جلسه بعدی.",
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            TextButton(
-              onPressed: _goToNextSession,
-              child: const Text("رد کردن استراحت و شروع جلسه بعدی"),
-            ),
-          ],
+          ),
+        ),
+        // Scaffold on top
+        Scaffold(
+          backgroundColor: Colors.transparent,
+          // appBar: CustomAppBar(
+          //   title: "Break",
+          // ),
+    body: Center(
+      child: SizedBox(
+        width: 500,   
+        height: 500,  
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.8),
+            shape: BoxShape.circle,  
+            boxShadow: [
+              BoxShadow(
+                color: Colors.white.withOpacity(0.3),
+                blurRadius: 20,
+                spreadRadius: 10,
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text(
+                "وقت استراحت",
+                style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                "$minutes:$seconds",
+                style: const TextStyle(
+                  fontSize: 40,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                "تا ۵ دقیقه به خودت استراحت بده.\n"
+                "بعد از تموم شدن، خودکار می‌ریم سر جلسه بعدی.",
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 20),
+              ),
+              const SizedBox(height: 24),
+              TextButton(
+                onPressed: _goToNextSession,
+                child: const Text("رد کردن استراحت و شروع جلسه بعدی"),
+              ),
+            ],
+          ),
         ),
       ),
+    )
+    ,
+        ),
+      ],
     );
   }
 }

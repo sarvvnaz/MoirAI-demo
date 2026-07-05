@@ -26,6 +26,11 @@ class UserResponse(BaseModel):
     email: EmailStr
     full_name_fa: str
     created_at: Optional[str] = None   
+    age: int
+    gender: str
+    degree: str
+    examGoal: str
+    studyHoursPerWeek: Optional[int] = None
 
     class Config:
         orm_mode = True

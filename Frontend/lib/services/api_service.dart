@@ -3,33 +3,47 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb; // 🔹 added
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+// ignore: deprecated_member_use
+import 'dart:html' as html;
+import 'dart:async';
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 
 // ⬅️ keep using LocalBackend for non-web (local dev / native)
 import '../main.dart' show LocalBackend;
 
+@JS('chrome.runtime.sendMessage')
+external void chromeRuntimeSendMessage(
+  String extensionId,
+  JSObject message,
+  JSFunction callback,
+);
+
+@JS('chrome.runtime.lastError')
+external JSObject? get chromeRuntimeLastError;
 class ApiService {
   static Uri _u(String path) => Uri.parse('http://127.0.0.1:8000$path');
-  static const _timeout = Duration(seconds: 12);
-  static int _localNudgeIndex = 0; // (kept from your code)
+  static const _timeout = Duration(seconds: 60);
+  static const String extensionId = 'cdfchhleliecjmcpdgnjdphfkpkkmckg';
 
-  // choose base URL depending on platform
-  // static Uri get _base {
-  //   if (kIsWeb) {
-  //     // On web: use same origin as the loaded page
-  //     final uri = Uri.base;
-  //     return Uri(
-  //       scheme: uri.scheme,
-  //       host: uri.host,
-  //       port: uri.hasPort ? uri.port : null,
-  //     );
-  //   } else {
-  //     // On desktop/mobile/local dev: use your LocalBackend (127.0.0.1:8765 etc.)
-  //     return LocalBackend.baseUrl;
-  //   }
-  // }
+  //choose base URL depending on platform
+  static Uri get _base {
+    if (kIsWeb) {
+      // On web: use same origin as the loaded page
+      final uri = Uri.base;
+      return Uri(
+        scheme: uri.scheme,
+        host: uri.host,
+        port: uri.hasPort ? uri.port : null,
+      );
+    } else {
+      // On desktop/mobile/local dev: use your LocalBackend (127.0.0.1:8765 etc.)
+      return LocalBackend.baseUrl;
+    }
+  }
 
-  // build URLs off _base instead of hardcoded 127.0.0.1
-  // static Uri _u(String path) => _base.replace(path: path);
+  //build URLs off _base instead of hardcoded 127.0.0.1
+  //static Uri _u(String path) => _base.replace(path: path);
 
   // ───────────────────────────────
   // Auth
@@ -73,9 +87,206 @@ class ApiService {
   }
 
   // ───────────────────────────────
+  // Baseline profile
+  // ───────────────────────────────
+  /// Saves the participant's baseline/demographic profile to the backend.
+  static Future<http.Response> submitProfile(
+      Map<String, dynamic> profileData) async {
+    final token = await getToken();
+    if (token == null) {
+      throw Exception('No access token');
+    }
+
+    return http
+        .post(
+          _u('/api/participant/profile'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode(profileData),
+        )
+        .timeout(_timeout);
+  }
+
+  // ───────────────────────────────
+  // EFT Episode submission
+  // ───────────────────────────────
+  /// Persists a structured EFT episode on the backend.
+  static Future<http.Response> submitEpisode(
+      Map<String, dynamic> episode) async {
+    final token = await getToken();
+    if (token == null) {
+      throw Exception('No access token');
+    }
+    final body = {'episode': episode};
+    return http
+        .post(
+          _u('/api/eft/episode'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode(body),
+        )
+        .timeout(_timeout);
+  }
+
+  
+  // ───────────────────────────────
+  // EFT Chat
+  // ───────────────────────────────
+  static Future<Map<String, dynamic>?> eftChat(
+      Map<String, dynamic> payload) async {
+    final token = await getToken();
+    if (token == null) {
+      return null;
+    }
+    final res = await http
+        .post(
+          _u('/api/eft/chat'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode(payload),
+        )
+        .timeout(_timeout);
+    if (res.statusCode == 200) {
+      try {
+        return jsonDecode(res.body) as Map<String, dynamic>;
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+// ───────────────────────────────
+// Extension setup
+// ───────────────────────────────
+static Future<http.Response> ensureExtensionReminder() async {
+  final token = await getToken();
+
+  if (token == null) {
+    throw Exception('No access token');
+  }
+
+  return http
+      .post(
+        _u('/api/extension/ensure-reminder'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'image_url':
+              'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a7/React-icon.svg/512px-React-icon.svg.png',
+          'cue': 'تصویر تستی برای افزونه ذخیره شد.',
+        }),
+      )
+      .timeout(_timeout);
+}
+static Future<bool> connectExtension() async {
+  if (!kIsWeb) {
+    debugPrint('⚠️ Extension connection only works on web.');
+    return false;
+  }
+
+  final token = await getToken();
+
+  if (token == null) {
+    debugPrint('⚠️ No access token found for extension connection.');
+    return false;
+  }
+
+  final completer = Completer<bool>();
+
+  try {
+    final message = JSObject();
+
+    message.setProperty('action'.toJS, 'CONNECT_EFT_USER'.toJS);
+    message.setProperty('accessToken'.toJS, token.toJS);
+
+    chromeRuntimeSendMessage(
+      extensionId,
+      message,
+      ((JSAny? response) {
+        final lastError = chromeRuntimeLastError;
+
+        if (lastError != null) {
+          final errorMessage =
+              lastError.getProperty<JSString?>('message'.toJS)?.toDart ??
+                  'Unknown extension error';
+
+          debugPrint('⚠️ Extension connection error: $errorMessage');
+
+          if (!completer.isCompleted) {
+            completer.complete(false);
+          }
+          return;
+        }
+
+        bool success = false;
+
+        if (response != null) {
+          final responseObject = response as JSObject;
+          success =
+              responseObject.getProperty<JSBoolean?>('success'.toJS)?.toDart ==
+                  true;
+        }
+
+        debugPrint('🔌 Extension connected? $success');
+
+        if (!completer.isCompleted) {
+          completer.complete(success);
+        }
+      }).toJS,
+    );
+
+    return await completer.future.timeout(
+      const Duration(seconds: 3),
+      onTimeout: () {
+        debugPrint('⚠️ Extension connection timed out.');
+        return false;
+      },
+    );
+  } catch (e) {
+    debugPrint('⚠️ Failed to connect extension: $e');
+    return false;
+  }
+}
+
+// ───────────────────────────────
+  // Study session feedback
+  // ───────────────────────────────
+  /// Sends post-session feedback to the backend.
+  static Future<http.Response> submitStudyFeedback(
+      Map<String, dynamic> feedbackData) async {
+    final token = await getToken();
+    if (token == null) {
+      throw Exception('No access token');
+    }
+    return http
+        .post(
+          _u('/api/study/feedback'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode(feedbackData),
+        )
+        .timeout(_timeout);
+  }
+
+  // ───────────────────────────────
   // Token helper
   // ───────────────────────────────
   static Future<String?> getToken() async {
+      if (kIsWeb) {
+    // Flutter Web → use browser localStorage
+    return html.window.localStorage['access_token'];
+  }
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('access_token');
   }
@@ -112,39 +323,7 @@ class ApiService {
     }
   }
 
-  // ───────────────────────────────
-  // Nudges
-  // ───────────────────────────────
-  static Future<Map<String, dynamic>?> getNextNudge(
-      int userId, int currentNudgeId) async {
-    final token = await getToken();
-    if (token == null) {
-      debugPrint('⚠️ No token found — user not logged in?');
-      return null;
-    }
-
-    try {
-      final res = await http
-          .get(
-            _u('/api/nudges/$userId/$currentNudgeId'),
-            headers: {
-              'Authorization': 'Bearer $token',
-              'Content-Type': 'application/json',
-            },
-          )
-          .timeout(_timeout);
-
-      if (res.statusCode == 200) {
-        return jsonDecode(res.body) as Map<String, dynamic>;
-      } else {
-        debugPrint('⚠️ Failed to fetch nudge: ${res.statusCode}');
-        return null;
-      }
-    } catch (e) {
-      debugPrint('⚠️ Error fetching nudge: $e');
-      return null;
-    }
-  }
+  // Nudge support removed. The app no longer fetches or displays nudges.
 
   // ──────────────────────────────
   // Start Session
@@ -197,3 +376,4 @@ class ApiService {
     }
   }
 }
+

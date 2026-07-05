@@ -6,16 +6,14 @@ import 'dart:convert';
 // IMPORTANT: Only import dart:io on non-web platforms
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:neuronudge/screens/home_page.dart';
+// Remove HomePage import; we no longer use the old home screen for EFT
 import 'package:path/path.dart' as p;
 import 'screens/login_page.dart';
 import 'screens/signup_page.dart';
-import 'screens/reflection_page.dart';
-import 'screens/break_page.dart';
-import 'screens/feedback_page.dart';
-import 'screens/task_page.dart';
+
 import 'dart:ui_web' as ui;
 import 'dart:html' as html;
+// Remove unused reflection page import
 
 // Conditionally import dart:io
 // ignore: avoid_web_libraries_in_flutter
@@ -33,7 +31,8 @@ class LocalBackend {
   static const int _port = 8000;
   static Process? _proc;
 
-static Uri get baseUrl => Uri.base;
+  //static Uri get baseUrl => Uri.base;
+  static Uri get baseUrl => Uri.parse('http://127.0.0.1:$_port');
 
   /// SAFE START: Only runs on Windows/macOS
   static Future<void> start() async {
@@ -124,41 +123,39 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
 
-  runApp(const NeuroNudgeApp());
+  runApp(const moiraiApp());
 }
 
-class NeuroNudgeApp extends StatelessWidget {
-  const NeuroNudgeApp({super.key});
+class moiraiApp extends StatelessWidget {
+  const moiraiApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'MoirAI Demo',
       debugShowCheckedModeBanner: false,
-      initialRoute: '/login',
+      initialRoute: '/signup',
       routes: {
         '/login': (_) => LoginPage(),
         '/signup': (_) => SignUpPage(),
-        '/reflection': (_) => ReflectionPage(
-              userId: 0,
-        ),
-        '/home': (_) => HomePage(
-              userId: 0,
-            ),
-        '/break': (_) => BreakPage(
-              userId: 0,
-              breakDuration: const Duration(seconds: 10),
-              sessionId: 0,
-            ),
-        '/feedback': (_) => FeedbackPage(
-              userId: 0,
-              sessionId: 0,
-            ),
-        '/task': (_) => TaskPage(
-              userId: 0,
-              sessionId: 0,
-              sessionNumber: 0,
-            ),
+
+        // Baseline profile and EFT chat routes used in the new study flow
+        //'/baseline_profile': (_) => BaselineProfilePage(userId: 0),
+        //'/eft_chat': (_) => EFTChatPage(userId: 0),
+        //'/break': (_) => BreakPage(
+        //      userId: 0,
+        //      breakDuration: const Duration(seconds: 10),
+        //      sessionId: 0,
+        //    ),
+        //'/feedback': (_) => FeedbackPage(
+        //      userId: 0,
+        //      sessionNumber: 0,
+        //    ),
+        //'/task': (_) => TaskPage(
+        //      userId: 0,
+        //      sessionId: 0,
+        //      sessionNumber: 0,
+        //    ),
       },
     );
   }

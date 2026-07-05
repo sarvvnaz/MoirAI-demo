@@ -212,7 +212,7 @@ def log_generic_event(
     )
     if last_nudge:
       delta = (datetime.utcnow() - last_nudge.created_at).total_seconds()
-      if delta <= 60:
+      if delta >= 60:
         stats.total_refocus_within_60s = (
             (stats.total_refocus_within_60s or 0) + 1
         )
@@ -240,6 +240,7 @@ def log_generic_event(
     stats.avg_feedback_score = (
         total / stats.total_sessions if stats.total_sessions > 0 else 0
     )
+    
 
     # per-session value (latest rating)
     if session:
@@ -247,8 +248,7 @@ def log_generic_event(
 
     # Optionally: end session here if this marks the end of a focus block
     # session.ended_at = datetime.utcnow()
-
- 
+    
     if session  :
         print(
             f"🔢 AFTER  → "
@@ -264,6 +264,25 @@ def log_generic_event(
         )
     else: print("⚠️ No open session found!")
 
+  elif event_type == "eft_feedback":
+    # Update user info in the database
+    db.add(models.UserStats(
+        user_id=user_id,
+        ratingVividness= details.get("ratingVividness"),
+        ratingSpecificity= details.get("ratingSpecificity"),
+        ratingDifficulty= details.get("ratingDifficulty"),
+        ratingGoalImportance= details.get("ratingGoalImportance"),
+    ))
+  elif event_type == "user_info":
+    # Update user info in the database
+    db.query(models.User).filter(models.User.id == user_id).update({
+        "age": details.get("age"),
+        "gender": details.get("gender"),
+        "degree": details.get("degree"),
+        "examGoal": details.get("examGoal"),
+        "studyHoursPerWeek": details.get("studyHoursPerWeek"),
+    })
+     
   db.commit()
   print(f"✅ Logged {event_type} for user {user_id}")
   return {"message": f"{event_type} logged successfully"}
@@ -293,3 +312,5 @@ def end_session(
     print(f"🟢 Session {session.session_number} closed for user {user_id}")
 
     return {"message": "Session ended successfully"}
+
+

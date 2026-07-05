@@ -1,3 +1,5 @@
+
+
 from __future__ import annotations
 from datetime import datetime
 from typing import Optional, Literal
@@ -23,10 +25,15 @@ class User(Base):
     email: Mapped[EmailStr] = mapped_column(String(255), nullable=False, index=True)
     full_name_fa: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
-
+    age: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    gender: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    degree: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    examGoal: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    studyHoursPerWeek: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     __table_args__ = (
         UniqueConstraint("email", name="uq_users_email"),
     )
+
     # Relations
     eft_response: Mapped[Optional["EFTResponse"]] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"
@@ -47,8 +54,31 @@ class User(Base):
         back_populates="user", cascade="all, delete-orphan"
     )
 
+    # Baseline/demographic profile (one-to-one)
+    participant_profile: Mapped[Optional["ParticipantProfile"]] = relationship(
+        back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
 
-    def __repr__(self):
+    # Structured EFT episodes (one-to-many)
+    eft_episodes: Mapped[list["EFTEpisode"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
+    # Study feedback records (one-to-many)
+    study_feedback: Mapped[list["StudyFeedback"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+    
+
+    # Current EFT chat state (one-to-one transient state)
+    eft_chat_state: Mapped[Optional["EFTChatState"]] = relationship(
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan"
+    )
+def __repr__(self):
         return f"<User {self.email!r} name={self.full_name_fa!r}>"
 
 
@@ -62,12 +92,11 @@ class EFTResponse(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
 
-    q1_why_goal_matters: Mapped[Optional[str]] = mapped_column(Text)
-    q2_when_reach_goal: Mapped[Optional[str]] = mapped_column(Text)
-    q3_possible_obstacles: Mapped[Optional[str]] = mapped_column(Text)
-    q4_future_visualization: Mapped[Optional[str]] = mapped_column(Text)
-    q5_if_give_up: Mapped[Optional[str]] = mapped_column(Text)
-    q6_notes: Mapped[Optional[str]] = mapped_column(Text)
+    timeFrame: Mapped[Optional[str]] = mapped_column(String(255))
+    place: Mapped[Optional[str]] = mapped_column(String(255))
+    activities: Mapped[Optional[str]] = mapped_column(String(255))
+    people: Mapped[Optional[str]] = mapped_column(String(255))
+    feelings: Mapped[Optional[str]] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
 
 
@@ -198,6 +227,11 @@ class UserStats(Base):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
+    # eft feedback
+    ratingVividness: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    ratingSpecificity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    ratingDifficulty: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    ratingGoalImportance: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     total_idle_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_distraction_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -255,5 +289,147 @@ class Session(Base):
 
     user: Mapped["User"] = relationship(back_populates="sessions")
 
+# ─────────────────────────────
+# PARTICIPANT PROFILE
+# ─────────────────────────────
+class ParticipantProfile(Base):
+    """
+    Stores baseline demographic and study context information for a user.
+    Each user may have at most one profile; on subsequent submissions the
+    existing record is updated.
+    """
+    __tablename__ = "participant_profiles"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    age: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    education_level: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    study_field: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    english_goal: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    english_level: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    study_frequency: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    english_importance: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
 
-__all__ = ["User", "UserActivity", "EventLog", "UserStats", "Session"]
+    # Relationship back to user (optional)
+    user: Mapped["User"] = relationship(back_populates="participant_profile")
+
+# ─────────────────────────────
+# EFT EPISODE
+# ─────────────────────────────
+class EFTEpisode(Base):
+    """
+    Stores a single episodic future thinking (EFT) episode constructed by
+    the participant. The episode_json field contains all structured
+    details (date, place, actions, people, sensory, emotion/body, identity,
+    summary and confirmation) in JSON string form.
+    Multiple episodes per user are allowed (e.g. across studies).
+    """
+    __tablename__ = "eft_episodes"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    episode_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
+
+    user: Mapped["User"] = relationship(back_populates="eft_episodes")
+
+
+# ─────────────────────────────
+# EFT CHAT STATE (runtime only)
+# ─────────────────────────────
+class EFTChatState(Base):
+    """
+    Stores the transient state of an EFT chat conversation for a user.
+    This is NOT research data; it only maintains continuity between turns.
+    """
+    __tablename__ = "eft_chat_states"
+
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    current_step: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    fields_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    last_updated: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    user: Mapped["User"] = relationship(back_populates="eft_chat_state")
+# ─────────────────────────────
+# STUDY FEEDBACK
+# ─────────────────────────────
+
+class StudyFeedback(Base):
+    """
+    Stores the participant's feedback after each study session, capturing
+    self-reported vividness, accessibility, future-self connection, focus,
+    effort and whether the episode came to mind, along with optional
+    qualitative comments.
+    """
+    __tablename__ = "study_feedback"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    session_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    vividness: Mapped[int] = mapped_column(Integer, nullable=True)
+    accessibility: Mapped[int] = mapped_column(Integer, nullable=True)
+    future_self_connection: Mapped[int] = mapped_column(Integer, nullable=True)
+    task_focus: Mapped[int] = mapped_column(Integer, nullable=True)
+    effort: Mapped[int] = mapped_column(Integer, nullable=True)
+    episode_recall: Mapped[Optional[bool]] = mapped_column(Integer, nullable=True)  # store as 0/1
+    recall_detail: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    help_comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
+
+    user: Mapped["User"] = relationship(back_populates="study_feedback")
+
+# ─────────────────────────────
+# EXTENSION REMINDER IMAGE
+# ─────────────────────────────
+class ExtensionReminder(Base):
+    """
+    One active extension reminder image per user.
+    For now this stores a test image URL.
+    Later this will store the AI-generated cloud image URL.
+    """
+    __tablename__ = "extension_reminders"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
+    image_url: Mapped[str] = mapped_column(Text, nullable=False)
+    cue: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=func.now(),
+        onupdate=func.now(),
+    )
+
+    user: Mapped["User"] = relationship()
+
+
+
+__all__ = [
+    "User",
+    "UserActivity",
+    "EventLog",
+    "UserStats",
+    "Session",
+    "ParticipantProfile",
+    "EFTEpisode",
+    "StudyFeedback",
+    "EFTChatState",
+    "ExtensionReminder"
+]

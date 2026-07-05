@@ -10,6 +10,14 @@ class IdleDetector extends StatefulWidget {
   final VoidCallback? onIdle;   // show your nudge UI
   final VoidCallback? onFocusReturn;
 
+  /// Callback invoked when the user has been idle long enough to trigger a
+  /// nudge but the application is not currently in a visible or resumed
+  /// lifecycle state. This allows the caller (for example, a page) to
+  /// perform background-only behaviour such as scheduling a system
+  /// notification without displaying an in-app overlay. If null, suppressed
+  /// idle events will be silently deferred and handled when focus returns.
+  final VoidCallback? onIdleWhileSuppressed;
+
   const IdleDetector({
     Key? key,
     required this.userId,
@@ -17,6 +25,7 @@ class IdleDetector extends StatefulWidget {
     required this.idleThreshold,
     this.onIdle,
     this.onFocusReturn,
+    this.onIdleWhileSuppressed,
   }) : super(key: key);
 
   @override
@@ -113,6 +122,19 @@ class _IdleDetectorState extends State<IdleDetector>
           'focus_lost',
           _baseDetails(),
         );
+
+        // When the app loses focus, proactively invoke the optional
+        // onIdleWhileSuppressed callback. This can be used on web to
+        // dispatch a system notification immediately, informing the user
+        // that their attention has moved away from the app. Errors are
+        // silently ignored.
+        if (widget.onIdleWhileSuppressed != null) {
+          try {
+            widget.onIdleWhileSuppressed!();
+          } catch (e) {
+            debugPrint('⚠️ onIdleWhileSuppressed (focus lost) threw: $e');
+          }
+        }
         break;
 
       case AppLifecycleState.detached:
@@ -173,6 +195,19 @@ class _IdleDetectorState extends State<IdleDetector>
           'idle_threshold_ms': widget.idleThreshold.inMilliseconds,
         }),
       );
+
+      // In addition to deferring the nudge until focus returns, invoke the
+      // optional callback so the caller can handle this event when the app
+      // is backgrounded. This enables features such as dispatching browser
+      // notifications when the user navigates away from the tab. Errors are
+      // caught and logged but do not crash the idle detector.
+      if (widget.onIdleWhileSuppressed != null) {
+        try {
+          widget.onIdleWhileSuppressed!();
+        } catch (e) {
+          debugPrint("⚠️ onIdleWhileSuppressed threw: $e");
+        }
+      }
       return;
     }
 

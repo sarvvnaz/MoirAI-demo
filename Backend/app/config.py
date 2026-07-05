@@ -43,5 +43,5 @@ ACCESS_TOKEN_EXPIRE_DELTA = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
 # OTHER OPTIONAL SETTINGS
 # ─────────────────────────────
 
-APP_NAME = os.getenv("APP_NAME", "NeuroNudge Research Backend")
+APP_NAME = os.getenv("APP_NAME", "moirai Research Backend")
 DEBUG_MODE = os.getenv("DEBUG_MODE", "True").lower() == "true"
